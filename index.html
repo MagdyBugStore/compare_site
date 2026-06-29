@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>PhoneCompare — Side-by-Side Spec Showdown</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <!-- ── HEADER ─────────────────────────────────────── -->
+  <header class="site-header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">⬡</span>
+        <span class="logo-text">PhoneCompare</span>
+      </div>
+      <p class="header-sub">Select up to 5 devices to compare side by side</p>
+    </div>
+  </header>
+
+  <!-- ── DEVICE PICKER ──────────────────────────────── -->
+  <section class="picker-section">
+    <div class="picker-inner">
+      <h2 class="picker-title">Choose Your Devices</h2>
+      <div class="device-grid" id="deviceGrid"></div>
+      <div class="picker-actions">
+        <button class="btn btn-primary" id="compareBtn" disabled>
+          Compare Selected <span id="selectedCount" class="count-badge">0</span>
+        </button>
+        <button class="btn btn-ghost" id="clearBtn">Clear All</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── COMPARISON TABLE ───────────────────────────── -->
+  <section class="compare-section hidden" id="compareSection">
+    <div class="compare-inner">
+      <div class="compare-header-row" id="compareHeaderRow"></div>
+      <div class="spec-table" id="specTable"></div>
+    </div>
+  </section>
+
+  <!-- ── BENCHMARK CHARTS ───────────────────────────── -->
+  <section class="charts-section hidden" id="chartsSection">
+    <div class="charts-inner">
+      <h2 class="section-title">Performance at a Glance</h2>
+      <div class="charts-grid">
+        <div class="chart-card">
+          <h3 class="chart-title">AnTuTu Score</h3>
+          <div class="bar-chart" id="chartAntutu"></div>
+        </div>
+        <div class="chart-card">
+          <h3 class="chart-title">Geekbench (v6)</h3>
+          <div class="bar-chart" id="chartGeek"></div>
+        </div>
+        <div class="chart-card">
+          <h3 class="chart-title">3DMark Wild Life</h3>
+          <div class="bar-chart" id="chart3dmark"></div>
+        </div>
+        <div class="chart-card">
+          <h3 class="chart-title">Battery Life (hrs)</h3>
+          <div class="bar-chart" id="chartBattery"></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="site-footer">
+    <p>Data sourced from manufacturer specs &amp; benchmark databases · 2024–2026</p>
+  </footer>
+
+  <script src="data.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
