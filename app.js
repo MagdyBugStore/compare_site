@@ -1,14 +1,27 @@
 // ===========================================================
-// DeviceHub — e-commerce demo with Cart + Compare (max 5)
+// ApplianceHub — e-commerce demo with Cart + Compare (max 5)
+// Category: Built-in Electronic Appliances
+//   Microwave, Oven, Hob, Fryer, Hood, Fridge, Freezer, Dishwasher
 // Routing: hash-based with slug URLs
-//   #/                 -> product grid
+//   #/                 -> product grid (with filters)
 //   #/product/:slug    -> product detail
-//   #/compare          -> compare table (up to 5 products)
+//   #/compare          -> compare table (up to 5 appliances, same category)
 //   #/cart             -> cart page
 // ===========================================================
 
 const STORAGE_KEYS = { cart: "dh_cart", compare: "dh_compare" };
 const MAX_COMPARE = 5;
+
+// ---------- filter state (home / shop grid) ----------
+let filters = { category: "All", brands: new Set(), minPrice: "", maxPrice: "" };
+
+function productMatchesFilters(p) {
+  if (filters.category !== "All" && p.category !== filters.category) return false;
+  if (filters.brands.size > 0 && !filters.brands.has(p.brand)) return false;
+  if (filters.minPrice !== "" && p.price < parseFloat(filters.minPrice)) return false;
+  if (filters.maxPrice !== "" && p.price > parseFloat(filters.maxPrice)) return false;
+  return true;
+}
 
 // ---------- state helpers ----------
 function getCart() {
@@ -86,13 +99,18 @@ function toggleCompare(slug) {
     render();
     return;
   }
+  const p = findProduct(slug);
+  const existing = list.map(findProduct).filter(Boolean);
+  if (existing.length > 0 && existing[0].category !== p.category) {
+    showToast(`You can only compare ${existing[0].category} appliances together. Clear the compare list to switch category.`);
+    return;
+  }
   if (list.length >= MAX_COMPARE) {
-    showToast(`You can compare up to ${MAX_COMPARE} devices. Remove one first.`);
+    showToast(`You can compare up to ${MAX_COMPARE} appliances. Remove one first.`);
     return;
   }
   list.push(slug);
   setCompare(list);
-  const p = findProduct(slug);
   showToast(`Added "${p.name}" to compare (${list.length}/${MAX_COMPARE})`);
   render();
 }
@@ -153,19 +171,57 @@ function render() {
 }
 
 // ===========================================================
-// VIEW: Home / Product grid
+// VIEW: Home / Product grid (with filters)
 // ===========================================================
+function renderFilterBar() {
+  const categoryChips = ["All", ...CATEGORIES].map(cat => `
+    <button class="chip ${filters.category === cat ? "active" : ""}" data-action="filter-category" data-value="${cat}">${cat}</button>
+  `).join("");
+
+  const brandChips = BRANDS.map(b => `
+    <button class="chip ${filters.brands.has(b) ? "active" : ""}" data-action="filter-brand" data-value="${b}">${b}</button>
+  `).join("");
+
+  return `
+    <aside class="filter-sidebar">
+      <div class="filter-sidebar-head">
+        <h2>Filters</h2>
+        <button class="link-btn" data-action="clear-filters">Clear all</button>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Category</span>
+        <div class="chip-row">${categoryChips}</div>
+      </div>
+      <div class="filter-group">
+        <span class="filter-label">Brand</span>
+        <div class="chip-row">${brandChips}</div>
+      </div>
+      <div class="filter-group filter-price">
+        <span class="filter-label">Price ($)</span>
+        <div class="price-inputs">
+          <input type="number" id="filter-min-price" placeholder="Min" value="${filters.minPrice}" min="0">
+          <span>–</span>
+          <input type="number" id="filter-max-price" placeholder="Max" value="${filters.maxPrice}" min="0">
+        </div>
+        <button class="btn btn-outline" data-action="apply-price">Apply</button>
+      </div>
+    </aside>
+  `;
+}
+
 function renderHome() {
-  const cards = PRODUCTS.map(p => `
+  const filtered = PRODUCTS.filter(productMatchesFilters);
+
+  const cards = filtered.map(p => `
     <article class="card" data-slug="${p.slug}">
       <a href="#/product/${p.slug}" class="card-img-link">
         ${productImage(p, "card")}
       </a>
       <div class="card-body">
-        <span class="brand-tag">${p.brand}</span>
+        <span class="brand-tag">${p.brand} · ${p.category}</span>
         <h3><a href="#/product/${p.slug}">${p.name}</a></h3>
-        <p class="card-spec">${p.display.size} · ${p.platform.chipset.split("(")[0].trim()}</p>
-        <p class="price">${p.priceDisplay.split("/")[0].trim()}</p>
+        <p class="card-spec">${p.summary}</p>
+        <p class="price">${p.priceDisplay}</p>
         <div class="card-actions">
           <button class="btn btn-primary" data-action="add-cart" data-slug="${p.slug}">Add to Cart</button>
           <button class="btn btn-outline ${isInCompare(p.slug) ? "active" : ""}" data-action="toggle-compare" data-slug="${p.slug}">
@@ -177,11 +233,18 @@ function renderHome() {
   `).join("");
 
   return `
-    <section class="page-head">
-      <h1>Shop Devices</h1>
-      <p>Browse smartphones, add to your cart, or compare up to ${MAX_COMPARE} devices side-by-side.</p>
-    </section>
-    <div class="grid">${cards}</div>
+    <div class="shop-layout">
+      ${renderFilterBar()}
+      <div class="shop-main">
+        <section class="page-head">
+          <h1>Built-in Electronic Appliances</h1>
+          <p>Browse microwaves, ovens, hobs, fryers, hoods, fridges, freezers &amp; dishwashers. Add to your cart, or compare up to ${MAX_COMPARE} brands of the same appliance side-by-side.</p>
+        </section>
+        ${filtered.length === 0
+          ? `<div class="empty-state"><h2>No appliances match your filters</h2><p>Try clearing a filter to see more results.</p><button class="btn btn-primary" data-action="clear-filters">Clear all filters</button></div>`
+          : `<div class="grid">${cards}</div>`}
+      </div>
+    </div>
   `;
 }
 
@@ -194,36 +257,8 @@ function renderProduct(slug) {
     return `<div class="empty-state"><h2>Product not found</h2><a href="#/">Back to shop</a></div>`;
   }
 
-  const specRows = [
-    ["Network", p.network],
-    ["Announced", p.launch.announced],
-    ["Status", p.launch.status],
-    ["Dimensions", p.body.dimensions],
-    ["Weight", p.body.weight],
-    ["Build", p.body.build],
-    ["Protection", p.body.protection],
-    ["Display Type", p.display.type],
-    ["Display Size", p.display.size],
-    ["Resolution", p.display.resolution],
-    ["OS", p.platform.os],
-    ["Chipset", p.platform.chipset],
-    ["CPU", p.platform.cpu],
-    ["GPU", p.platform.gpu],
-    ["Internal Memory", p.memory.internal],
-    ["Main Camera", p.main_camera.lenses.join(" • ")],
-    ["Main Camera Video", p.main_camera.video],
-    ["Selfie Camera", p.selfie_camera.lenses.join(" • ")],
-    ["Loudspeaker", p.sound.loudspeaker],
-    ["3.5mm Jack", p.sound.jack_3_5mm],
-    ["WLAN", p.comms.wlan],
-    ["Bluetooth", p.comms.bluetooth],
-    ["USB", p.comms.usb],
-    ["Sensors", (p.features.sensors || []).join(", ")],
-    ["Battery", p.battery.type],
-    ["Charging", p.battery.charging],
-    ["Colors", (p.misc.colors || []).join(", ")],
-    ["Price", p.priceDisplay],
-  ];
+  const groups = COMPARE_GROUPS_BY_CATEGORY[p.category] || [];
+  const specRows = groups.flatMap(g => g.rows.map(([label, fn]) => [label, fn(p)]));
 
   return `
     <a href="#/" class="back-link">&larr; Back to shop</a>
@@ -232,10 +267,9 @@ function renderProduct(slug) {
         ${productImage(p, "gallery")}
       </div>
       <div class="product-info">
-        <span class="brand-tag">${p.brand}</span>
+        <span class="brand-tag">${p.brand} · ${p.category}</span>
         <h1>${p.name}</h1>
-        <p class="price-lg">${p.priceDisplay.split("/")[0].trim()}</p>
-        <p class="full-price">${p.priceDisplay}</p>
+        <p class="price-lg">${p.priceDisplay}</p>
         <div class="product-actions">
           <button class="btn btn-primary btn-lg" data-action="add-cart" data-slug="${p.slug}">Add to Cart</button>
           <button class="btn btn-outline btn-lg ${isInCompare(p.slug) ? "active" : ""}" data-action="toggle-compare" data-slug="${p.slug}">
@@ -257,55 +291,8 @@ function renderProduct(slug) {
 }
 
 // ===========================================================
-// VIEW: Compare (#/compare) — up to 5 devices, full spec rows
+// VIEW: Compare (#/compare) — up to 5 appliances, same category
 // ===========================================================
-const COMPARE_SPEC_GROUPS = [
-  { group: "Overview", rows: [
-    ["Price", p => p.priceDisplay],
-    ["Announced", p => p.launch.announced],
-    ["Status", p => p.launch.status],
-  ]},
-  { group: "Body", rows: [
-    ["Dimensions", p => p.body.dimensions],
-    ["Weight", p => p.body.weight],
-    ["Build", p => p.body.build],
-    ["Protection", p => p.body.protection],
-  ]},
-  { group: "Display", rows: [
-    ["Type", p => p.display.type],
-    ["Size", p => p.display.size],
-    ["Resolution", p => p.display.resolution],
-  ]},
-  { group: "Platform", rows: [
-    ["OS", p => p.platform.os],
-    ["Chipset", p => p.platform.chipset],
-    ["CPU", p => p.platform.cpu],
-    ["GPU", p => p.platform.gpu],
-  ]},
-  { group: "Memory", rows: [
-    ["Internal", p => p.memory.internal],
-    ["Card Slot", p => p.memory.card_slot],
-  ]},
-  { group: "Main Camera", rows: [
-    ["Lenses", p => p.main_camera.lenses.join("<br>")],
-    ["Video", p => p.main_camera.video],
-  ]},
-  { group: "Selfie Camera", rows: [
-    ["Lenses", p => p.selfie_camera.lenses.join("<br>")],
-    ["Video", p => p.selfie_camera.video],
-  ]},
-  { group: "Battery", rows: [
-    ["Type", p => p.battery.type],
-    ["Charging", p => p.battery.charging],
-  ]},
-  { group: "Connectivity", rows: [
-    ["WLAN", p => p.comms.wlan],
-    ["Bluetooth", p => p.comms.bluetooth],
-    ["USB", p => p.comms.usb],
-    ["NFC", p => p.comms.nfc],
-  ]},
-];
-
 function renderCompare() {
   const slugs = getCompare();
   const products = slugs.map(findProduct).filter(Boolean);
@@ -313,11 +300,14 @@ function renderCompare() {
   if (products.length === 0) {
     return `
       <div class="empty-state">
-        <h2>No devices to compare yet</h2>
-        <p>Pick up to ${MAX_COMPARE} devices from the shop to compare specs side-by-side.</p>
-        <a href="#/" class="btn btn-primary">Browse devices</a>
+        <h2>No appliances to compare yet</h2>
+        <p>Pick up to ${MAX_COMPARE} brands of the same appliance from the shop to compare specs side-by-side.</p>
+        <a href="#/" class="btn btn-primary">Browse appliances</a>
       </div>`;
   }
+
+  const category = products[0].category;
+  const groups = COMPARE_GROUPS_BY_CATEGORY[category] || [];
 
   const head = `
     <tr>
@@ -334,7 +324,7 @@ function renderCompare() {
         </th>`).join("")}
     </tr>`;
 
-  const body = COMPARE_SPEC_GROUPS.map(g => `
+  const body = groups.map(g => `
     <tr class="group-row"><td colspan="${products.length + 1}">${g.group}</td></tr>
     ${g.rows.map(([label, fn]) => `
       <tr>
@@ -345,8 +335,8 @@ function renderCompare() {
 
   return `
     <section class="page-head">
-      <h1>Compare Devices</h1>
-      <p>${products.length} / ${MAX_COMPARE} devices selected.
+      <h1>Compare Built-in Electronic Appliances</h1>
+      <p>${category} — ${products.length} / ${MAX_COMPARE} selected.
         <button class="link-btn" data-action="clear-compare">Clear all</button>
       </p>
     </section>
@@ -368,7 +358,7 @@ function renderCart() {
     return `
       <div class="empty-state">
         <h2>Your cart is empty</h2>
-        <a href="#/" class="btn btn-primary">Browse devices</a>
+        <a href="#/" class="btn btn-primary">Browse appliances</a>
       </div>`;
   }
 
@@ -381,7 +371,7 @@ function renderCart() {
         <td class="cart-thumb-cell">${productImage(p, "thumb")}</td>
         <td>
           <a href="#/product/${p.slug}">${p.name}</a>
-          <div class="muted">${p.priceDisplay.split("/")[0].trim()} each</div>
+          <div class="muted">${p.priceDisplay} each</div>
         </td>
         <td class="qty-cell">
           <button class="qty-btn" data-action="qty-dec" data-slug="${p.slug}">−</button>
@@ -430,6 +420,21 @@ function attachEvents() {
       if (action === "qty-dec") changeQty(slug, -1);
       if (action === "clear-compare") clearCompare();
       if (action === "checkout") { showToast("Demo checkout — order placed!"); setCart([]); render(); }
+      if (action === "filter-category") { filters.category = el.dataset.value; render(); }
+      if (action === "filter-brand") {
+        const b = el.dataset.value;
+        if (filters.brands.has(b)) filters.brands.delete(b); else filters.brands.add(b);
+        render();
+      }
+      if (action === "apply-price") {
+        filters.minPrice = document.getElementById("filter-min-price").value.trim();
+        filters.maxPrice = document.getElementById("filter-max-price").value.trim();
+        render();
+      }
+      if (action === "clear-filters") {
+        filters = { category: "All", brands: new Set(), minPrice: "", maxPrice: "" };
+        render();
+      }
       if (action === "add-cart" || action === "toggle-compare") {
         // refresh button state in place without full reroute jank
         render();
